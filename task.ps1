@@ -38,19 +38,13 @@ Write-Host "Creating a resource group $resourceGroupName ..."
 New-AzResourceGroup -Name $resourceGroupName -Location $location
 
 Write-Host "Creating web network security group..."
-$webHttpRule = New-AzNetworkSecurityRuleConfig -Name "Allow-HTTP-HTTPS" -Description "Allow HTTP/HTTPS" `
+# ЄДИНЕ правило: дозволяємо 80/443/8080 з усього VNet (включно з management)
+$webRule = New-AzNetworkSecurityRuleConfig -Name "web" -Description "Allow 80/443/8080 from VirtualNetwork" `
    -Access Allow -Protocol Tcp -Direction Inbound -Priority 100 `
-   -SourceAddressPrefix Internet -SourcePortRange * `
-   -DestinationAddressPrefix * -DestinationPortRange 80,443
-
-# 🔐 Додатково дозволяємо порт 8080 з management subnet
-$web8080Rule = New-AzNetworkSecurityRuleConfig -Name "Allow-8080-From-Management" -Description "Allow TCP 8080 from management subnet" `
-   -Access Allow -Protocol Tcp -Direction Inbound -Priority 110 `
-   -SourceAddressPrefix $mngSubnetIpRange -SourcePortRange * `
-   -DestinationAddressPrefix $webSubnetIpRange -DestinationPortRange 8080
-
+   -SourceAddressPrefix VirtualNetwork -SourcePortRange * `
+   -DestinationAddressPrefix * -DestinationPortRange 80,443,8080
 $webNsg = New-AzNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Location $location -Name `
-   $webSubnetName -SecurityRules $webHttpRule,$web8080Rule
+   $webSubnetName -SecurityRules $webRule
 
 Write-Host "Creating mngSubnet network security group..."
 $mngSshRule = New-AzNetworkSecurityRuleConfig -Name "Allow-SSH" -Description "Allow SSH" `
