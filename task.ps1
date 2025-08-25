@@ -38,16 +38,25 @@ Write-Host "Creating a resource group $resourceGroupName ..."
 New-AzResourceGroup -Name $resourceGroupName -Location $location
 
 Write-Host "Creating web network security group..."
-$webHttpRule = New-AzNetworkSecurityRuleConfig -Name "web" -Description "Allow HTTP" `
-   -Access Allow -Protocol Tcp -Direction Inbound -Priority 100 -SourceAddressPrefix `
-   Internet -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 80,443
+$webHttpRule = New-AzNetworkSecurityRuleConfig -Name "Allow-HTTP-HTTPS" -Description "Allow HTTP/HTTPS" `
+   -Access Allow -Protocol Tcp -Direction Inbound -Priority 100 `
+   -SourceAddressPrefix Internet -SourcePortRange * `
+   -DestinationAddressPrefix * -DestinationPortRange 80,443
+
+# 🔐 Додатково дозволяємо порт 8080 з management subnet
+$web8080Rule = New-AzNetworkSecurityRuleConfig -Name "Allow-8080-From-Management" -Description "Allow TCP 8080 from management subnet" `
+   -Access Allow -Protocol Tcp -Direction Inbound -Priority 110 `
+   -SourceAddressPrefix $mngSubnetIpRange -SourcePortRange * `
+   -DestinationAddressPrefix $webSubnetIpRange -DestinationPortRange 8080
+
 $webNsg = New-AzNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Location $location -Name `
-   $webSubnetName -SecurityRules $webHttpRule
+   $webSubnetName -SecurityRules $webHttpRule,$web8080Rule
 
 Write-Host "Creating mngSubnet network security group..."
-$mngSshRule = New-AzNetworkSecurityRuleConfig -Name "ssh" -Description "Allow SSH" `
-   -Access Allow -Protocol Tcp -Direction Inbound -Priority 100 -SourceAddressPrefix `
-   Internet -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 22
+$mngSshRule = New-AzNetworkSecurityRuleConfig -Name "Allow-SSH" -Description "Allow SSH" `
+   -Access Allow -Protocol Tcp -Direction Inbound -Priority 100 `
+   -SourceAddressPrefix Internet -SourcePortRange * `
+   -DestinationAddressPrefix * -DestinationPortRange 22
 $mngNsg = New-AzNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Location $location -Name `
    $mngSubnetName -SecurityRules $mngSshRule
 
@@ -57,7 +66,6 @@ $mngSubnet = New-AzVirtualNetworkSubnetConfig -Name $mngSubnetName -AddressPrefi
 $virtualNetwork = New-AzVirtualNetwork -Name $virtualNetworkName -ResourceGroupName $resourceGroupName -Location $location -AddressPrefix $vnetAddressPrefix -Subnet $webSubnet,$mngSubnet
 
 Write-Host "Creating a SSH key resource ..."
-# акуратно пересоздаємо ключ (якщо існував порожній)
 Remove-AzSshKey -Name $sshKeyName -ResourceGroupName $resourceGroupName -ErrorAction SilentlyContinue
 New-AzSshKey -Name $sshKeyName -ResourceGroupName $resourceGroupName -PublicKey $sshKeyPublicKey | Out-Null
 
